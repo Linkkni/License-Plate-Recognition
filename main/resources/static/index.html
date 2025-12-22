@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Gate - LPR System</title>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        h1 { color: #333; }
+
+        /* Khung chứa Camera */
+        .camera-container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Canvas ẩn dùng để chụp ảnh */
+        canvas { display: none; }
+
+        /* Nút chụp */
+        .btn-capture {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 18px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-capture:hover { background-color: #0056b3; transform: translateY(-2px); }
+        .btn-capture:active { transform: translateY(0); }
+
+        /* Khu vực hiển thị kết quả */
+        #result-area {
+            margin-top: 30px;
+            width: 640px;
+            padding: 20px;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: none; /* Ẩn mặc định */
+            text-align: center;
+        }
+
+        .status-box { font-weight: bold; font-size: 24px; margin-bottom: 10px; }
+        .ALLOWED { color: #28a745; border: 2px solid #28a745; padding: 10px; border-radius: 5px; }
+        .BLOCKED { color: #dc3545; border: 2px solid #dc3545; padding: 10px; border-radius: 5px; }
+        .UNKNOWN { color: #ffc107; border: 2px solid #ffc107; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1> Auto Gate System</h1>
+    <div class="camera-container">
+        <video id="video" autoplay playsinline muted></video>
+    </div>
+    <button class="btn-capture" onclick="captureAndSend()"> SCAN PLATE</button>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <div id="result-area">
+        <div id="status-text" class="status-box">
+            CHECKING...
+        </div>
+        <p id="message-text">Please Wait</p>
+        <p><strong>Plate:</strong> <span id="plate-number">---</span></p>
+        <p><strong>Owner:</strong><span id="owner-name">---</span></p>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+
+        // 1. FIX: Request Back Camera (environment)
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+        })
+            .then(stream => {
+                video.srcObject = stream;
+                // 2. FIX: Ensure video plays explicitly
+                video.play();
+            })
+            .catch(err => {
+                console.error("Error accessing camera: ", err);
+                // Display specific error to screen for easier debugging
+                alert("Camera Error: " + err.name + ". Check HTTPS or Permissions.");
+            });
+
+        function captureAndSend() {
+            // 3. FIX: Use actual video size to avoid distortion/black bars
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(function (blob) {
+                const formData = new FormData();
+                formData.append('image', blob, 'capture.jpg');
+
+                document.getElementById('result-area').style.display = 'block';
+                document.getElementById('status-text').className = 'status-box';
+                document.getElementById('status-text').innerText = 'Processing...'; // Reset text
+                document.getElementById('message-text').innerText = 'Sending to AI...';
+
+                fetch('/api/images/check', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Success:', data);
+                        displayResult(data);
+                    })
+                    .catch((error) => {
+                        console.error('Error:', error);
+                        document.getElementById('status-text').innerText = 'ERROR';
+                        document.getElementById('message-text').innerText = 'System Error. Please try again.';
+                    });
+            }, 'image/jpeg');
+        }
+
+        function displayResult(data) {
+            const statusDiv = document.getElementById('status-text');
+            const messageP = document.getElementById('message-text');
+            const plateSpan = document.getElementById('plate-number');
+            const ownerSpan = document.getElementById('owner-name');
+
+            statusDiv.innerText = data.status;
+            statusDiv.className = 'status-box ' + data.status;
+            messageP.innerText = data.message;
+
+            if(data.data && typeof data.data === 'object') {
+                plateSpan.innerText = data.data.plateNumber || 'Unknown';
+                ownerSpan.innerText = data.data.ownerName || 'Unknown';
+            } else {
+                plateSpan.innerText = data.data || 'Unknown';
+                ownerSpan.innerText = 'Unknown';
+            }
+        }
+    </script>
+</body>
+</html>
