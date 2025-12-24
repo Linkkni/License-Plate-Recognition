@@ -16,7 +16,7 @@ public class LicensePlateController {
     @PostMapping("/add")
     public ResponseEntity<?> addPlate(@RequestBody Plate plate){
         try {
-            return ResponseEntity.ok(licensePlateService.registerVehical(plate));
+            return ResponseEntity.ok(licensePlateService.registerVehicel(plate));
         }catch (Exception e){
             return ResponseEntity.badRequest().body(e.getMessage());
         }

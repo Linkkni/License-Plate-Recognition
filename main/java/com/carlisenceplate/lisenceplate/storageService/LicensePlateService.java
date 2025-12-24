@@ -33,34 +33,44 @@ public class LicensePlateService {
     @Autowired
     private LicensePlateRepository licensePlateRepository;
 
-    // URL của Python Server
-    private final String PYTHON_API_URL = "http://localhost:5000/detect";
+
+
+
+    // URL's Python Server
+    private final String PYTHON_API_URL = "http://localhost:9091/detect";
 
     public String extractPlateNumber(String imagePath) {
+
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             File file = new File(imagePath);
 
-            // 1. Tạo Request gửi file sang Python
+
+            //Use apache HttpClient to send image to Python server
+
+            // 1. create Request and send imgage to  Python
             HttpPost uploadFile = new HttpPost(PYTHON_API_URL);
-            MultipartEntityBuilder builder = MultipartEntityBuilder.create();
 
-            // Đính kèm file ảnh
-            builder.addBinaryBody("image", file, ContentType.IMAGE_JPEG, file.getName());
-            HttpEntity multipart = builder.build();
-            uploadFile.setEntity(multipart);
 
-            // 2. Gửi và nhận kết quả
-            try (CloseableHttpResponse response = httpClient.execute(uploadFile)) {
-                HttpEntity responseEntity = response.getEntity();
-                String responseString = EntityUtils.toString(responseEntity);
+            MultipartEntityBuilder builder = MultipartEntityBuilder.create();// create a box
 
-                // 3. Parse JSON từ Python trả về
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode rootNode = mapper.readTree(responseString);
+            // assigned file
 
-                String status = rootNode.path("status").asText();
+            builder.addBinaryBody("image", file, ContentType.IMAGE_JPEG, file.getName()); //put thing(image ) into box
+            HttpEntity multipart = builder.build(); //build the box before send
+            uploadFile.setEntity(multipart); // put on carrier
+
+            // 2. send and get response from Python
+            try (CloseableHttpResponse response = httpClient.execute(uploadFile)) { // send the box
+                HttpEntity responseEntity = response.getEntity(); // get response box
+                String responseString = EntityUtils.toString(responseEntity); // get thing(string) from response box
+
+                // 3. Parse JSON response from Python
+                ObjectMapper mapper = new ObjectMapper(); // need a Parser
+                JsonNode rootNode = mapper.readTree(responseString); //let him read the string
+
+                String status = rootNode.path("status").asText(); // find status in JSON
                 if ("success".equals(status)) {
-                    return rootNode.path("plate").asText(); // Trả về biển số: "GR35383"
+                    return rootNode.path("plate").asText(); // if is success get plate number
                 }
             }
         } catch (Exception e) {
@@ -69,16 +79,15 @@ public class LicensePlateService {
         return "No Plate Found";
     }
 
-    public Plate registerVehical(Plate plate){
+    public Plate registerVehicel(Plate plate){
         //Checking Plate availability
         if(licensePlateRepository.existsByPlateNumber(plate.getPlateNumber())){
             throw new RuntimeException("Plate Already Exists");
         }
 
-        if (plate.getStatus() == null) {
+        if (plate.getStatus() != null) {
             plate.setStatus("ALLOWED");
         }
-
         return licensePlateRepository.save(plate);
     }
 
